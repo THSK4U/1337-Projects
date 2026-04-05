@@ -1,0 +1,37 @@
+[
+  { "prompt": "What is the sum of 2 and 3?" },
+  { "prompt": "What is the sum of 265 and 345?" },
+  { "prompt": "Can you add 10.5 and -4.2?" },
+  { "prompt": "Sum of 0 and 0" },
+  { "prompt": "Add the numbers 999999999 and 1" },
+  { "prompt": "What is -100 plus 50?" },
+  
+  { "prompt": "Greet shrek" },
+  { "prompt": "Greet john" },
+  { "prompt": "Say hello to Mr. Anderson" },
+  { "prompt": "Generate a greeting message for Alice" },
+  { "prompt": "Greet ''" },  
+  { "prompt": "Greet '!@#$'" },  
+  
+  { "prompt": "Reverse the string 'hello'" },
+  { "prompt": "Can you reverse this for me: 'racecar'" },
+  { "prompt": "Reverse the string '!@#$%^&*()'" },
+  { "prompt": "Reverse the string ''" },
+  { "prompt": "Reverse 'A very long string with spaces and numbers 123'" },
+  
+  { "prompt": "What is the square root of 16?" },
+  { "prompt": "Find the square root of 144" },
+  { "prompt": "Calculate the square root of 0" },
+  { "prompt": "Square root of 3.14159" },
+  { "prompt": "What is the square root of -9?" },  
+  
+  { "prompt": "How do I bake a chocolate cake?" },
+  { "prompt": "Translate 'hello' to French" },
+  { "prompt": "Who won the World Cup in 2022?" },
+  { "prompt": "Write a python script to sort an array" },
+  
+  { "prompt": "Can you reverse the sum of 2 and 3?" },
+  { "prompt": "Add 'hello' and 'world'" },
+  { "prompt": "Greet the number 42" },
+  { "prompt": "Is 5 an even number?" }
+]
