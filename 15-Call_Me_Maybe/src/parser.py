@@ -1,8 +1,47 @@
 import json
-from models import FunctionDefinition, TestPrompt
+from .models import FunctionDefinition, TestPrompt
+import argparse
+
+
+def parse_optional_arguments() -> argparse.Namespace:
+    """Parse the command line arguments.
+
+    Returns:
+        The namespace containing all configured arguments.
+    """
+    parser = argparse.ArgumentParser(
+        description="Function Calling with Constrained Decoding",
+        conflict_handler="error",
+    )
+
+    parser.add_argument(
+        "--functions_definition",
+        type=str,
+        default="data/input/functions_definition.json",
+    )
+    parser.add_argument(
+        "--input",
+        type=str,
+        default="data/input/function_calling_tests.json",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="data/output/function_calling_results.json",
+    )
+
+    return parser.parse_args()
 
 
 def parse_functions_definition(file_path: str) -> list[FunctionDefinition]:
+    """Parse function definitions from a given JSON file.
+
+    Args:
+        file_path: The path to the JSON file containing function structures.
+
+    Returns:
+        A list of parsed FunctionDefinition objects.
+    """
     with open(file_path, "r") as file:
         data = json.load(file)
 
@@ -13,6 +52,14 @@ def parse_functions_definition(file_path: str) -> list[FunctionDefinition]:
 
 
 def parse_test_prompts(file_path: str) -> list[TestPrompt]:
+    """Parse experimental prompts from a JSON file.
+
+    Args:
+        file_path: The path to the JSON formatted prompts file.
+
+    Returns:
+        A list of parsed TestPrompt objects.
+    """
     with open(file_path, "r") as file:
         data = json.load(file)
 

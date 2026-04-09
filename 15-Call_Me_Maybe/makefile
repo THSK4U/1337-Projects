@@ -1,12 +1,34 @@
-all: clear run
+NAME   = src
+PYTHON = uv run python
+FLAKE  = uv run flake8
+MYPY   = uv run mypy
+PDB    = uv run python -m pdb
 
-clear:
-	clear
+all: run
 
 run:
-	uv run python src
-ex:
-	uv run python -m moulinette prepare_exercises
+	@$(PYTHON) -m $(NAME) --functions_definition data/input/functions_definition.json \
+	 --input data/input/function_calling_tests.json --output data/output/function_calling_results.json
 
-cor:
-	uv run python -m moulinette evaluate_student_answers --student_answer_path "data/output/function_calling_results.json"
+install:
+	@pipx install uv
+	@uv sync
+
+debug:
+	@$(PDB) -m $(NAME)
+
+clean:
+	@find . -type d -name "__pycache__" -print -exec rm -rf {} +
+	@find . -type d -name ".mypy_cache" -print -exec rm -rf {} +
+
+lint:
+	@$(FLAKE) $(NAME)
+	@$(MYPY) $(NAME) \
+	--warn-return-any \
+	--warn-unused-ignores \
+	--ignore-missing-imports \
+	--disallow-untyped-defs \
+	--check-untyped-defs
+
+
+.PHONY: all run install lint lint-strict debug clean
