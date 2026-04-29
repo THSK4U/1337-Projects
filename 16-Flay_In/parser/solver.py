@@ -1,181 +1,203 @@
-from parser.parser import status_drone, Connection, Drones, ZoneType
+from parser.parser import status_drone, ZoneType, Graph
 import heapq
 
 
 class solver:
-    def __init__(self, graph) -> None:
+    """Simulation engine and pathfinding solver for the drone routing."""
+
+    def __init__(self, graph: Graph) -> None:
+        """Initializes the solver engine with the given network graph.
+
+        Args:
+            graph (Graph): The loaded environmental map graph.
+        """
         self.graph = graph
-        self.connection = graph.connections
-        self.path_solve = {}
+        self.path_solve: dict[float, list[list[str]]] = {}
 
     def solve(self, path_solve: list) -> list:
-        drones = self.graph.drones
-        graph = self.graph.hubs
+        """Simulates the drone movements over multiple turns across paths.
 
-        drone_path = {
-            drone: path_solve[i % len(path_solve)]
-            for i, drone in enumerate(drones)
-        }
-        step = {d: 0 for d in drones}
-        turns = 0
-        final_path = []
-        in_transit = {}
+        Args:
+            path_solve (list): A predefined selection of optimal paths that
+                the drones will split between evenly.
 
-        while True:
-            turns += 1
-            current_mov = {}
-            current_path = []
-            arrived_this_turn = set()
+        Returns:
+            list: A structured list describing drone movements per discrete
+                simulation turn, used by the visualizer.
+        """
+        if not self.graph.drones:
+            raise ValueError("No drones available to simulate.")
+        if not path_solve:
+            raise ValueError("No solution paths provided.")
 
-            for drone in list(in_transit.keys()):
-                info = in_transit[drone]
-                new_zone = info["to"]
-                graph[new_zone].current_drones += 1
-                drones[drone].current_hub = graph[new_zone]
-                drones[drone].status = status_drone.MOVING
-                step[drone] += 1
-                arrived_this_turn.add(drone)
-                current_path.append(
-                    [drone, info["from"], new_zone, drones[drone].status]
-                )
-                del in_transit[drone]
+        try:
+            drones = self.graph.drones
+            graph = self.graph.hubs
 
-            for drone in drones:
-                if drone in arrived_this_turn:
-                    continue
+            drone_path = {
+                drone: path_solve[i % len(path_solve)]
+                for i, drone in enumerate(drones)
+            }
+            step = {d: 0 for d in drones}
+            turns = 0
+            final_path = []
+            in_transit: dict[str, dict[str, str]] = {}
+            print("\n")
 
-                my_path = drone_path[drone]
-                zone = my_path[step[drone]]
+            while True:
+                turns += 1
+                current_mov: dict[str, int] = {}
+                current_path = []
+                arrived_this_turn = set()
 
-                # print(zone)
-                if zone == "goal":
-                    continue
+                for drone in list(in_transit.keys()):
+                    info = in_transit[drone]
+                    new_zone = info["to"]
+                    graph[new_zone].current_drones += 1
+                    drones[drone].current_hub = graph[new_zone]
+                    drones[drone].status = status_drone.MOVING
+                    step[drone] += 1
+                    arrived_this_turn.add(drone)
+                    current_path.append(
+                        [drone, info["from"], new_zone, drones[drone].status]
+                    )
+                    del in_transit[drone]
 
-                new_zone = my_path[step[drone] + 1]
+                for drone in drones:
+                    if drone in arrived_this_turn:
+                        continue
 
-                hub = [
-                    h
-                    for h in graph[zone].neighbors
-                    if h.objective.name == new_zone
-                ]
-                used = current_mov.get(new_zone, 0)
-                max_capacity = hub[0].max_capacity if hub else 1
+                    my_path = drone_path[drone]
+                    zone = my_path[step[drone]]
 
-                # print(max_capacity, used)
-                if (
-                    used < max_capacity
-                    and graph[new_zone].current_drones
-                    < graph[new_zone].max_drones
-                ):
-                    current_mov[new_zone] = used + 1
+                    if zone == "goal":
+                        continue
 
-                    if graph[new_zone].type_zone == ZoneType.RESTRICTED:
-                        graph[zone].current_drones -= 1
-                        drones[drone].status = status_drone.LAZY
-                        in_transit[drone] = {"from": zone, "to": new_zone}
-                        current_path.append(
-                            [drone, zone, new_zone, drones[drone].status]
-                        )
+                    new_zone = my_path[step[drone] + 1]
+
+                    c = [
+                        h
+                        for h in graph[zone].neighbors
+                        if h.objective.name == new_zone
+                    ]
+                    used = current_mov.get(new_zone, 0)
+                    max_capacity = c[0].max_capacity if c else 1
+
+                    if (
+                        used < max_capacity
+                        and graph[new_zone].current_drones
+                        < graph[new_zone].max_drones
+                    ):
+                        current_mov[new_zone] = used + 1
+
+                        id_drone = drones[drone].id_drone
+                        if graph[new_zone].type_zone == ZoneType.RESTRICTED:
+                            graph[zone].current_drones -= 1
+                            drones[drone].status = status_drone.LAZY
+                            in_transit[drone] = {"from": zone, "to": new_zone}
+                            current_path.append(
+                                [drone, zone, new_zone, drones[drone].status]
+                            )
+                            print(
+                                f"{id_drone}-C{graph[new_zone].name}",
+                                end=" ",
+                            )
+                        else:
+                            drones[drone].current_hub = graph[new_zone]
+                            drones[drone].status = status_drone.MOVING
+                            graph[zone].current_drones -= 1
+                            graph[new_zone].current_drones += 1
+                            step[drone] += 1
+                            current_path.append([drone, zone, new_zone])
+                            print(
+                                f"{id_drone}-{graph[new_zone].name}",
+                                end=" ",
+                            )
                     else:
-                        drones[drone].current_hub = graph[new_zone]
-                        drones[drone].status = status_drone.MOVING
-                        graph[zone].current_drones -= 1
-                        graph[new_zone].current_drones += 1
-                        step[drone] += 1
-                        # print(waiting[drone])
-                        current_path.append([drone, zone, new_zone])
-                else:
-                    drones[drone].status = status_drone.LAZY
+                        drones[drone].status = status_drone.LAZY
+                print(end="\n")
+                final_path.append(current_path.copy())
 
-            final_path.append(current_path.copy())
-
-            if (
-                all(drone_path[d][step[d]] == "goal" for d in drones)
-                and not in_transit
-            ):
-                break
-
-            # print(step)
-        print("The Turns :", turns)
-        return final_path
-        # return step
-
-    def get_path(self, k=2) -> None:
-        neighbors: dict[str, list] = {}
-        for hub in self.graph.hubs:
-            neighbors[hub] = []
-            # print("Hub:", hub)
-
-            for nb in self.graph.hubs[hub].neighbors:
-                obj = nb.objective
-
-                if nb.objective.type_zone in (
-                    ZoneType.PRIORITY,
-                    ZoneType.NORMAL,
-                    ZoneType.RESTRICTED,
+                if (
+                    all(drone_path[d][step[d]] == "goal" for d in drones)
+                    and not in_transit
                 ):
-                    if obj.neighbors or obj.name == "goal":
-                        neighbors[hub].append(nb)
+                    break
 
-        # print(neighbors['start'])
+            print("The Turns :", turns)
+            return final_path
+        except Exception as e:
+            raise ValueError(f"Simulation failed: {e}")
 
-        queue: list[tuple[int, str]] = []
-        came_from: dict[str, str] = {}
-        cost_hub: dict[str, int] = {}
-        all_path = {}
-        visited: dict[str, int] = {}
-        heapq.heappush(queue, (0, ["start"]))
-        cost_hub["start"] = 0
+    def get_path(self, k: int = 2) -> dict[float, list[list[str]]]:
+        """Calculates 'K' shortest constrained paths from start to goal.
 
-        while queue and len(all_path) < k:
-            current_cost, path = heapq.heappop(queue)
-            current = path[-1]
+        Args:
+            k (int): The maximum iterations of alternate shortest paths to
+                search for and assemble.
 
-            visited[current] = visited.get(current, 0) + 1
-            if visited[current] > k:
-                continue
+        Returns:
+            dict[float, list[list[str]]]: A dictionary where keys represent
+                the cost of pathways, and values contain grouped route nodes.
+        """
+        if "start" not in self.graph.hubs:
+            raise ValueError("Start hub is missing.")
+        if "goal" not in self.graph.hubs:
+            raise ValueError("Goal hub is missing.")
 
-            if current == "goal":
-                if current_cost in all_path:
-                    all_path[current_cost] += [path]
-                else:
-                    all_path[current_cost] = [path]
-                continue
+        try:
+            neighbors: dict[str, list] = {}
+            for hub in self.graph.hubs:
+                neighbors[hub] = []
 
-            for nb in neighbors.get(current, []):
-                neighbor = nb.objective
-                neighbor_name = neighbor.name
+                for nb in self.graph.hubs[hub].neighbors:
+                    obj = nb.objective
 
-                if neighbor.max_drones == 0 or neighbor_name in path:
+                    if nb.objective.type_zone in (
+                        ZoneType.PRIORITY,
+                        ZoneType.NORMAL,
+                        ZoneType.RESTRICTED,
+                    ):
+                        if obj.neighbors or obj.name == "goal":
+                            neighbors[hub].append(nb)
+
+            queue: list[tuple[float, list[str]]] = []
+            all_path: dict[float, list[list[str]]] = {}
+            heapq.heappush(queue, (0.0, ["start"]))
+
+            while queue and len(all_path) < k:
+                current_cost, path = heapq.heappop(queue)
+                current = path[-1]
+
+                if current == "goal":
+                    if current_cost in all_path:
+                        all_path[current_cost] += [path]
+                    else:
+                        all_path[current_cost] = [path]
                     continue
 
-                cost_zone = 1
-                if neighbor.type_zone == ZoneType.RESTRICTED:
-                    cost_zone = 2
-                elif neighbor.type_zone == ZoneType.PRIORITY:
-                    cost_zone = 0.9
+                for nb in neighbors.get(current, []):
+                    neighbor = nb.objective
+                    neighbor_name = neighbor.name
 
-                if neighbor.max_drones > 1:
-                    cost_zone -= 0.1 * neighbor.max_drones
+                    if neighbor.max_drones == 0 or neighbor_name in path:
+                        continue
 
-                # new_cost = (cost_hub[current] + cost_zone) + (1 / nb.max_capacity)
+                    cost_zone: float = 1.0
+                    if neighbor.type_zone == ZoneType.RESTRICTED:
+                        cost_zone = 2
+                    elif neighbor.type_zone == ZoneType.PRIORITY:
+                        cost_zone = 0.9
 
-                new_cost = (current_cost + cost_zone) + (1 / nb.max_capacity)
-                heapq.heappush(queue, (new_cost, path + [neighbor_name]))
-                # print(queue)
+                    if neighbor.max_drones > 1:
+                        cost_zone -= 0.1 * neighbor.max_drones
 
-                # if neighbor_name not in cost_hub or new_cost < cost_hub[neighbor_name]:
-                #     cost_hub[neighbor_name] = new_cost
-                #     priority = new_cost
+                    new_cost = (current_cost + cost_zone) + (
+                        1 / nb.max_capacity
+                    )
 
-                #     heapq.heappush(queue, (priority, neighbor_name))
-                #     came_from[neighbor_name] = current
+                    heapq.heappush(queue, (new_cost, path + [neighbor_name]))
 
-        # print("CameFrom:", [current for current in came_from if current != 'start'])
-        # exit()
-
-        # path_final: list[str] = ['start']
-        # while current != 'start':
-        #     path_final.insert(1, current)
-        #     current = came_from[current]
-        return all_path
+            return all_path
+        except Exception as e:
+            raise ValueError(f"Pathfinding failed: {e}")
