@@ -1,3 +1,4 @@
+from parser.exceptions import PathNotFound
 from parser.solver import solver
 from parser import visualizer
 from parser import parser
@@ -83,48 +84,52 @@ def main() -> None:
     """The main entry point bridging user inputs, map parsing and solving."""
     try:
 
-        visual_idx = choose_visual()
+        # visual_idx = choose_visual()
 
-        if visual_idx == 1:
+        # if visual_idx == 1:
 
-            path_file = choose_map()
-            print(f"\nRunning map: {path_file}")
+        # path_file = choose_map()
+        path_file = files['easy'][1]['2']
+        print(f"\nRunning map: {path_file}")
 
-            graph_dict = parser.Graph(path_file)
-            solve = solver(graph_dict)
+        graph_dict = parser.Graph(path_file)
+        solve = solver(graph_dict)
 
-            path_solve = solve.get_path(k=4)
+        path_solve = solve.get_path(k=4)
 
-            if len(path_solve):
-                best_path = path_solve[min(path_solve)]
-            else:
-                raise ValueError("No valid path found.")
+        if len(path_solve):
+            best_path = path_solve[min(path_solve)]
+        else:
+            raise PathNotFound("No valid path found.")
 
-            move_drones = solve.solve(best_path)
+        move_drones = solve.solve(best_path)
 
-            visualizer.start_graph(graph_dict, move_drones)
+        # visualizer.start_graph(graph_dict, move_drones)
 
-        elif visual_idx == 2:
-            for file in files:
-                print(file)
-                for path_dict in files[file]:
-                    for key, value in path_dict.items():
-                        path_file = value
+        # elif visual_idx == 2:
+        #     for file in files:
+        #         print(file)
+        #         for path_dict in files[file]:
+        #             for key, value in path_dict.items():
+        #                 path_file = value
 
-                        graph_dict = parser.Graph(path_file)
-                        solve = solver(graph_dict)
+        #                 graph_dict = parser.Graph(path_file)
+        #                 solve = solver(graph_dict)
 
-                        path_solve = solve.get_path(k=4)
+        #                 path_solve = solve.get_path(k=4)
 
-                        if len(path_solve):
-                            best_path = path_solve[min(path_solve)]
-                        else:
-                            raise ValueError("No valid path found.")
+        #                 if len(path_solve):
+        #                     best_path = path_solve[min(path_solve)]
+        #                 else:
+        #                     raise PathNotFound("No valid path found.")
 
-                        move_drones = solve.solve(best_path)
+        #                 move_drones = solve.solve(best_path)
 
     except Exception as e:
         print(f"Error: {e}")
+    except (KeyboardInterrupt, EOFError):
+        print("\nExiting...")
+        exit(0)
 
 
 if __name__ == "__main__":

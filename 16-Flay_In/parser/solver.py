@@ -1,4 +1,5 @@
 from parser.parser import status_drone, ZoneType, Graph
+from parser.exceptions import SolverError, SimulationError, PathNotFound
 import heapq
 
 
@@ -26,9 +27,9 @@ class solver:
                 simulation turn, used by the visualizer.
         """
         if not self.graph.drones:
-            raise ValueError("No drones available to simulate.")
+            raise SimulationError("No drones available to simulate.")
         if not path_solve:
-            raise ValueError("No solution paths provided.")
+            raise SimulationError("No solution paths provided.")
 
         try:
             drones = self.graph.drones
@@ -127,7 +128,7 @@ class solver:
             print("The Turns :", turns)
             return final_path
         except Exception as e:
-            raise ValueError(f"Simulation failed: {e}")
+            raise SimulationError(e)
 
     def get_path(self, k: int = 2) -> dict[float, list[list[str]]]:
         """Calculates 'K' shortest constrained paths from start to goal.
@@ -141,9 +142,9 @@ class solver:
                 the cost of pathways, and values contain grouped route nodes.
         """
         if "start" not in self.graph.hubs:
-            raise ValueError("Start hub is missing.")
+            raise PathNotFound("'start' hub is missing from the graph.")
         if "goal" not in self.graph.hubs:
-            raise ValueError("Goal hub is missing.")
+            raise PathNotFound("'goal' hub is missing from the graph.")
 
         try:
             neighbors: dict[str, list] = {}
@@ -200,4 +201,4 @@ class solver:
 
             return all_path
         except Exception as e:
-            raise ValueError(f"Pathfinding failed: {e}")
+            raise PathNotFound(e)

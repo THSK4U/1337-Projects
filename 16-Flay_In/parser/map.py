@@ -1,3 +1,6 @@
+from parser.exceptions import InvalidSyntax, MapError
+
+
 def read_map(path_file: str) -> dict[str, list]:
     """Reads and parses the raw text file of a map.
 
@@ -14,15 +17,23 @@ def read_map(path_file: str) -> dict[str, list]:
     with open(path_file, mode="r") as f:
         lines = [line.rstrip() for line in f]
         if not lines:
-            raise ValueError("Map file is empty.")
+            raise MapError("Map file is empty.")
 
-    for line in lines:
+    for index, line in enumerate(lines, start=1):
         if line and not line.startswith("#") and ":" in line:
             key = line.split(": ")
             if not len(key) == 2:
-                raise ValueError("Invalid line format. Use 'key: value'.")
+                raise InvalidSyntax(
+                    index,
+                    f"Invalid line format. Use 'key: value'. Got: '{line}'")
             if key[0] in dict_lines:
-                dict_lines[key[0]].append(key[1])
+                dict_lines[key[0]].append((index, key[1]))
             else:
-                dict_lines[key[0]] = [key[1]]
+                dict_lines[key[0]] = [(index, key[1])]
+        elif not line or line.startswith('#'):
+            continue
+        else:
+            raise InvalidSyntax(
+                index,
+                f"Invalid line format. Use 'key: value'. Got: '{line}'")
     return dict_lines
