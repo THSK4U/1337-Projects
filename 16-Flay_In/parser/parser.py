@@ -232,13 +232,12 @@ class Graph:
 
                 max_capacity = 1
                 if len(list_connection) > 1:
-                    if not '[]' in list_connection:
+                    if not list_connection[1].startswith('[') and list_connection[1].endswith(']'):
                         raise InvalidSyntax(index, f"'{list_connection[1]}' Optional metadata can be specified in brackets [...]")
 
                     strip_1 = list_connection[1].strip('[]').replace("=", " = ")
 
                     tokens = strip_1.split()
-                    print(tokens[0])
                     if len(tokens) > 3 or not tokens[0] == "max_link_capacity":
                         raise InvalidSyntax(index, f"'{list_connection[1]}' Expected Only: max_link_capacity: <positive_integer>.")
                    
@@ -254,23 +253,16 @@ class Graph:
                 if names[1] not in self.hubs:
                     raise InvalidName(index, f"Hub '{names[1]}' is not defined. Check your hub declarations.")
 
-                if names[0] not in self.connections:
-                    self.connections[names[0]] = []
-                self.connections[names[0]].append(
-                    Connection(
-                        objective=self.hubs[names[1]],
-                        max_capacity=max_capacity,
+                names_list = [names[0], names[1]]
+                for name in names_list:
+                    if name not in self.connections:
+                        self.connections[name] = []
+                    self.connections[name].append(
+                        Connection(
+                            objective=self.hubs[names[1]],
+                            max_capacity=max_capacity,
+                        )
                     )
-                )
-
-                if names[1] not in self.connections:
-                    self.connections[names[1]] = []
-                self.connections[names[1]].append(
-                    Connection(
-                        objective=self.hubs[names[0]],
-                        max_capacity=max_capacity,
-                    )
-                )
 
 
             if self.hubs['start'].type_zone == ZoneType.BLOCKED:
