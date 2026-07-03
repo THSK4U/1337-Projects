@@ -22,8 +22,12 @@ static int	handle_compile_phase(t_coder *coder)
 {
 	if (simulation_check(coder->data))
 		return (0);
-	if (!take_two_dongles(coder))
-		return (0);
+	while (!take_two_dongles(coder))
+	{
+		if (simulation_check(coder->data) || get_time_ms() >= coder->deadline)
+			return (0);
+		usleep(500);
+	}
 	pthread_mutex_lock(&coder->state_mutex);
 	coder->last_compile_start = get_time_ms();
 	coder->deadline = coder->last_compile_start + coder->data->time_to_burnout;

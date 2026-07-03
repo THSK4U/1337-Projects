@@ -12,15 +12,18 @@
 
 #include "codexion.h"
 
-static int	fail_take(t_dongle *dongle, t_coder *coder)
+static int	fail_take(t_dongle *dongle, t_coder *coder, int is_second)
 {
-	queue_remove(dongle, coder);
-	pthread_cond_broadcast(&dongle->cond);
+	if (!is_second)
+	{
+		queue_remove(dongle, coder);
+		pthread_cond_broadcast(&dongle->cond);
+	}
 	pthread_mutex_unlock(&dongle->mutex);
 	return (0);
 }
 
-static int	take_one_dongle(t_coder *coder, int dongle_id)
+static int	take_one_dongle(t_coder *coder, int dongle_id, int is_second)
 {
 	t_dongle		*dongle;
 	struct timespec	ts;
@@ -32,8 +35,10 @@ static int	take_one_dongle(t_coder *coder, int dongle_id)
 	while (dongle->in_use || get_time_ms() < dongle->release_time
 		|| dongle->queue[0] != coder)
 	{
+		if (is_second)
+			return (fail_take(dongle, coder, is_second));
 		if (get_time_ms() >= coder->deadline || simulation_check(coder->data))
-			return (fail_take(dongle, coder));
+			return (fail_take(dongle, coder, !is_second));
 		ms_to_timespec(&ts, get_next_timeout(coder, dongle));
 		pthread_cond_timedwait(&dongle->cond, &dongle->mutex, &ts);
 	}
@@ -76,9 +81,9 @@ int	take_two_dongles(t_coder *coder)
 		first = second;
 		second = tmp;
 	}
-	if (!take_one_dongle(coder, first))
+	if (!take_one_dongle(coder, first, 0))
 		return (0);
-	if (!take_one_dongle(coder, second))
+	if (!take_one_dongle(coder, second, 1))
 	{
 		release_one_dongle(coder, first);
 		return (0);
