@@ -6,7 +6,7 @@
 /*   By: Tsellak <tsellak@student.1337.ma>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/29 08:52:42 by Tsellak           #+#    #+#             */
-/*   Updated: 2026/06/29 10:36:33 by Tsellak          ###   ########.fr       */
+/*   Updated: 2026/07/03 00:43:55 by Tsellak          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -31,6 +31,7 @@ typedef struct s_coder
 	int				compile_count;
 	int				left_dongle;
 	int				right_dongle;
+	int				is_compiling;
 	struct s_data	*data;
 	pthread_mutex_t	state_mutex;
 }					t_coder;

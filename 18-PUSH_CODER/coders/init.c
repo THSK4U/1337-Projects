@@ -6,7 +6,7 @@
 /*   By: Tsellak <tsellak@student.1337.ma>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/29 08:58:37 by Tsellak           #+#    #+#             */
-/*   Updated: 2026/06/29 10:53:10 by Tsellak          ###   ########.fr       */
+/*   Updated: 2026/07/04 16:08:52 by Tsellak          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,7 +20,7 @@ static int	init_dongle(t_data *data, int i)
 	data->dongles[i].in_use = 0;
 	data->dongles[i].release_time = 0;
 	data->dongles[i].tail = 0;
-	data->dongles[i].queue = malloc(sizeof(t_coder *) * 2);
+	data->dongles[i].queue = malloc(sizeof(t_coder *) * data->num_coders);
 	return (!data->dongles[i].queue);
 }
 
@@ -52,7 +52,11 @@ static int	init_ressource(t_data *data)
 			return (1);
 		}
 		if (init_coder(data, i))
+		{
+			while (--i >= 0)
+				free(data->dongles[i].queue);
 			return (1);
+		}
 		i++;
 	}
 	return (0);

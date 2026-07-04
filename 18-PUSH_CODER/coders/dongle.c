@@ -6,26 +6,24 @@
 /*   By: Tsellak <tsellak@student.1337.ma>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/29 08:58:29 by Tsellak           #+#    #+#             */
-/*   Updated: 2026/06/29 11:02:23 by Tsellak          ###   ########.fr       */
+/*   Updated: 2026/07/04 16:27:20 by Tsellak          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "codexion.h"
 
-static int	fail_take(t_dongle *dongle, t_coder *coder, int is_second)
+static int	fail_take(t_dongle *dongle, t_coder *coder)
 {
-	if (!is_second)
-	{
-		queue_remove(dongle, coder);
-		pthread_cond_broadcast(&dongle->cond);
-	}
+	queue_remove(dongle, coder);
+	pthread_cond_broadcast(&dongle->cond);
 	pthread_mutex_unlock(&dongle->mutex);
 	return (0);
 }
 
-static int	take_one_dongle(t_coder *coder, int dongle_id, int is_second)
+static int	take_one_dongle(t_coder *coder, int dongle_id)
 {
 	t_dongle		*dongle;
+	long			timeout;
 	struct timespec	ts;
 
 	dongle = &coder->data->dongles[dongle_id];
@@ -35,17 +33,15 @@ static int	take_one_dongle(t_coder *coder, int dongle_id, int is_second)
 	while (dongle->in_use || get_time_ms() < dongle->release_time
 		|| dongle->queue[0] != coder)
 	{
-		if (is_second)
-			return (fail_take(dongle, coder, is_second));
 		if (get_time_ms() >= coder->deadline || simulation_check(coder->data))
-			return (fail_take(dongle, coder, !is_second));
-		ms_to_timespec(&ts, get_next_timeout(coder, dongle));
+			return (fail_take(dongle, coder));
+		timeout = get_next_timeout(coder, dongle);
+		ms_to_timespec(&ts, timeout);
 		pthread_cond_timedwait(&dongle->cond, &dongle->mutex, &ts);
 	}
 	queue_pop(dongle, coder->data);
 	dongle->in_use = 1;
 	dongle->release_time = 0;
-	pthread_cond_broadcast(&dongle->cond);
 	pthread_mutex_unlock(&dongle->mutex);
 	if (simulation_check(coder->data))
 		return (0);
@@ -73,17 +69,15 @@ int	take_two_dongles(t_coder *coder)
 
 	first = coder->left_dongle;
 	second = coder->right_dongle;
-	if (first == second)
-		return (0);
 	if (second < first)
 	{
 		tmp = first;
 		first = second;
 		second = tmp;
 	}
-	if (!take_one_dongle(coder, first, 0))
+	if (!take_one_dongle(coder, first))
 		return (0);
-	if (!take_one_dongle(coder, second, 1))
+	if (!take_one_dongle(coder, second))
 	{
 		release_one_dongle(coder, first);
 		return (0);

@@ -6,7 +6,7 @@
 /*   By: Tsellak <tsellak@student.1337.ma>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/29 08:58:34 by Tsellak           #+#    #+#             */
-/*   Updated: 2026/06/29 08:58:34 by Tsellak          ###   ########.fr       */
+/*   Updated: 2026/07/01 03:38:09 by Tsellak          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -40,7 +40,7 @@ void	heap_down(t_dongle *dongle)
 		if (child + 1 < dongle->tail
 			&& compare_edf(dongle->queue[child + 1], dongle->queue[child]))
 			smallest = child + 1;
-		if (!compare_edf(dongle->queue[i], dongle->queue[smallest]))
+		if (compare_edf(dongle->queue[i], dongle->queue[smallest]))
 			break ;
 		tmp = dongle->queue[i];
 		dongle->queue[i] = dongle->queue[smallest];

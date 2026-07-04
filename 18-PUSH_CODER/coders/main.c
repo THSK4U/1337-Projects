@@ -6,7 +6,7 @@
 /*   By: Tsellak <tsellak@student.1337.ma>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/29 08:58:41 by Tsellak           #+#    #+#             */
-/*   Updated: 2026/06/29 09:00:31 by Tsellak          ###   ########.fr       */
+/*   Updated: 2026/07/02 23:14:54 by Tsellak          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -31,8 +31,8 @@ long	ft_atol(char *str)
 
 static int	validate_args(char *argv[])
 {
-	int		i;
-	int		j;
+	int	i;
+	int	j;
 
 	i = 1;
 	while (i <= 7)
@@ -64,6 +64,10 @@ static void	parse_args(const char *allow[], char *argv[], t_data *data)
 	err = validate_args(argv);
 	if (err)
 		ft_exit("Not valid argumant %s = %s\n", allow[err - 1], argv[err]);
+	if (ft_atol(argv[1]) > INT_MAX)
+		ft_exit("Not valid argumant %s = %s\n", allow[0], argv[1]);
+	if (ft_atol(argv[6]) > INT_MAX)
+		ft_exit("Not valid argumant %s = %s\n", allow[5], argv[6]);
 	data->num_coders = (int)ft_atol(argv[1]);
 	data->time_to_burnout = ft_atol(argv[2]);
 	data->time_to_compile = ft_atol(argv[3]);

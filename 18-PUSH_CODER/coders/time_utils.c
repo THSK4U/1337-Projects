@@ -6,7 +6,7 @@
 /*   By: Tsellak <tsellak@student.1337.ma>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/29 08:58:53 by Tsellak           #+#    #+#             */
-/*   Updated: 2026/06/29 08:58:53 by Tsellak          ###   ########.fr       */
+/*   Updated: 2026/07/03 01:39:24 by Tsellak          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -43,6 +43,7 @@ int	sleep_until_or_burnout(t_coder *coder, long duration_ms)
 {
 	long	end;
 	long	now;
+	long	remaining;
 
 	end = get_time_ms() + duration_ms;
 	while (1)
@@ -52,9 +53,12 @@ int	sleep_until_or_burnout(t_coder *coder, long duration_ms)
 			return (0);
 		if (now >= end)
 			return (1);
-		if (end - now > 10)
-			usleep(10000);
-		else
+		remaining = end - now;
+		if (remaining > 10)
+			usleep(5000);
+		else if (remaining > 1)
 			usleep(1000);
+		else
+			usleep(200);
 	}
 }

@@ -6,7 +6,7 @@
 /*   By: Tsellak <tsellak@student.1337.ma>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/29 08:58:45 by Tsellak           #+#    #+#             */
-/*   Updated: 2026/06/29 10:40:46 by Tsellak          ###   ########.fr       */
+/*   Updated: 2026/07/04 16:16:00 by Tsellak          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -51,13 +51,28 @@ static int	check_and_mark(t_data *data)
 		if (data->coders[i].compile_count < data->num_compiles_required)
 		{
 			all_done = 0;
-			if (now >= data->coders[i].deadline)
+			if (!data->coders[i].is_compiling
+				&& now >= data->coders[i].deadline)
 				mark_burnout(&data->coders[i]);
 		}
 		pthread_mutex_unlock(&data->coders[i].state_mutex);
 		i++;
 	}
 	return (all_done);
+}
+
+static void	wake_all(t_data *data)
+{
+	int	i;
+
+	i = 0;
+	while (i < data->num_coders)
+	{
+		pthread_mutex_lock(&data->dongles[i].mutex);
+		pthread_cond_broadcast(&data->dongles[i].cond);
+		pthread_mutex_unlock(&data->dongles[i].mutex);
+		i++;
+	}
 }
 
 void	*monitor_routine(void *arg)
@@ -71,6 +86,7 @@ void	*monitor_routine(void *arg)
 		{
 			pthread_mutex_lock(&data->state_mutex);
 			data->simulation_end = 1;
+			wake_all(data);
 			pthread_mutex_unlock(&data->state_mutex);
 			break ;
 		}
