@@ -6,7 +6,7 @@
 /*   By: Tsellak <tsellak@student.1337.ma>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/29 08:58:45 by Tsellak           #+#    #+#             */
-/*   Updated: 2026/07/04 16:16:00 by Tsellak          ###   ########.fr       */
+/*   Updated: 2026/07/04 23:03:08 by Tsellak          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -86,8 +86,8 @@ void	*monitor_routine(void *arg)
 		{
 			pthread_mutex_lock(&data->state_mutex);
 			data->simulation_end = 1;
-			wake_all(data);
 			pthread_mutex_unlock(&data->state_mutex);
+			wake_all(data);
 			break ;
 		}
 		usleep(1000);
