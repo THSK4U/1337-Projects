@@ -1,0 +1,165 @@
+from math import sin
+from typing import Any
+
+import arcade
+
+from ..core import DIR_DATA, Directions
+
+
+class Pacman:
+    """Represents the player-controlled Pac-Man character."""
+
+    def __init__(self, maze: list[list[int]]) -> None:
+        """Initialize Pac-Man position, state, and UI text elements.
+
+        Args:
+            maze: 2D grid matrix representing the level layout.
+        """
+        self.init_x = (len(maze[0]) - 1) // 2
+        self.x = self.init_x
+        self.init_y = (len(maze) - 1) // 2
+        self.y = self.init_y
+        self.prev_x = float(self.x)
+        self.prev_y = float(self.y)
+        self.smooth_x = float(self.x)
+        self.smooth_y = float(self.y)
+        self.step_time = 0.0
+        self.angle = 0
+        self.path = {(self.x, self.y)}
+        self.direction = Directions.DOWN
+        self.next_direction = Directions.DOWN
+        self.maze = maze
+        self.death_count = 0
+        self.score = 0
+        self.is_teleporting = False
+        self.final_score = 0
+
+        self.score_text = arcade.Text(
+            f"SCORE: {self.score}",
+            x=20,
+            y=980,
+            color=arcade.color.YELLOW,
+            font_size=24,
+            font_name="Renogare",
+        )
+        self.lives_text = arcade.Text(
+            "LIVES:",
+            x=20,
+            y=910,
+            color=arcade.color.YELLOW,
+            font_name="Renogare",
+            font_size=24,
+        )
+
+    def reset_game(self) -> None:
+        """Reset player stats, score, and position to initial values."""
+        self.death_count = 0
+        self.score = 0
+        self.score_text.text = "SCORE: 0"
+        self.x = self.init_x
+        self.y = self.init_y
+        self.smooth_x = float(self.init_x)
+        self.smooth_y = float(self.init_y)
+        self.prev_x = float(self.init_x)
+        self.prev_y = float(self.init_y)
+        self.direction = Directions.DOWN
+        self.next_direction = Directions.DOWN
+        self.path = {(self.init_x, self.init_y)}
+
+    def can_turn(self, x: int, y: int, direction: Directions) -> bool:
+        """Check whether movement in a given direction is unobstructed.
+
+        Args:
+            x: Horizontal grid position.
+            y: Vertical grid position.
+            direction: Desired direction to move.
+
+        Returns:
+            True if path is free of walls, False otherwise.
+        """
+        mask, _, _, _ = DIR_DATA[direction]
+        return not (self.maze[y][x] & mask)
+
+    def set_next_direction(self, new_dir: Directions) -> None:
+        """Buffer and immediately apply direction if unobstructed.
+
+        Args:
+            new_dir: New direction requested by player.
+        """
+        self.next_direction = new_dir
+        if self.can_turn(self.x, self.y, new_dir):
+            self.direction = new_dir
+            self.angle = DIR_DATA[new_dir][3]
+
+    def update(self) -> None:
+        """Advance player one step in current direction with portal wrap."""
+        self.is_teleporting = False
+        self.prev_x = self.smooth_x
+        self.prev_y = self.smooth_y
+        self.step_time = 0.0
+
+        cols = len(self.maze[0])
+        rows = len(self.maze)
+        self.path.add((self.x, self.y))
+
+        if self.can_turn(self.x, self.y, self.next_direction):
+            self.direction = self.next_direction
+
+        mask, dx, dy, angle = DIR_DATA[self.direction]
+        self.angle = angle
+
+        if not (self.maze[self.y][self.x] & mask):
+            if 0 <= self.x + dx < cols:
+                self.x += dx
+            elif self.x + dx < 0:
+                self.is_teleporting = True
+                self.x = cols - 1
+                self.smooth_x = float(cols - 1)
+            elif self.x + dx >= cols:
+                self.is_teleporting = True
+                self.x = 0
+                self.smooth_x = 0.0
+
+            if 0 <= self.y + dy < rows:
+                self.y += dy
+            elif self.y + dy < 0:
+                self.is_teleporting = True
+                self.y = rows - 1
+                self.smooth_y = float(rows - 1)
+            elif self.y + dy >= rows:
+                self.is_teleporting = True
+                self.y = 0
+                self.smooth_y = 0.0
+
+    def smooth_animation(
+        self, delta_time: float, duration: float = 0.20
+    ) -> None:
+        """Interpolate smooth rendering position between grid steps.
+
+        Args:
+            delta_time: Elapsed time since last frame.
+            duration: Time allocated for complete single-cell traversal.
+        """
+        self.step_time += delta_time
+        progress = min(1.0, self.step_time / duration)
+        self.smooth_x = self.prev_x + (self.x - self.prev_x) * progress
+        self.smooth_y = self.prev_y + (self.y - self.prev_y) * progress
+
+    def draw(self, game_view: Any) -> None:
+        """Render animated Pac-Man sprite on the screen.
+
+        Args:
+            game_view: Active game view providing coordinates and styling.
+        """
+        cx, cy = game_view.cell_center(self.smooth_x, self.smooth_y)
+        radius = 15 * 0.025 * game_view.cell_size
+        color = game_view.theme_colors.get("pacman", arcade.color.YELLOW)
+        arcade.draw_arc_filled(
+            cx,
+            cy,
+            radius,
+            radius,
+            color,
+            30 + self.angle + 15 * sin(game_view.progress * 3),
+            330 + self.angle - 15 * sin(game_view.progress * 3),
+        )
