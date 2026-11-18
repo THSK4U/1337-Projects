@@ -1,0 +1,249 @@
+import hashlib
+import json
+import os
+import re
+from pathlib import Path
+
+from tqdm import tqdm
+
+from .chunks import code_strategies, text_strategies
+from .embedding import Embedding
+from .models import (
+    FullSource,
+    MarkdownMetadata,
+    config,
+)
+
+processed = Path(config.processed_dir)
+try:
+    with open(processed / "file_hashes.json", "r") as f:
+        hashes_cache = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    hashes_cache = {}
+
+
+def calculate_file_hash(file_path: str | Path) -> bool:
+    """Check if file hash has changed and update cache.
+
+    Args:
+        file_path: Path to the target file.
+
+    Returns:
+        bool: True if file was modified or new, False otherwise.
+    """
+    file_path = str(file_path)
+
+    with open(file_path, "rb") as f:
+        file_hash = hashlib.sha256(f.read()).hexdigest()
+
+    if file_path in hashes_cache and hashes_cache[file_path] == file_hash:
+        return False
+
+    hashes_cache[file_path] = file_hash
+    with open(processed / "file_hashes.json", "w") as f:
+        json.dump(hashes_cache, f, indent=2)
+
+    return True
+
+
+def load_all_files() -> tuple[list[FullSource], list[FullSource]]:
+    """Scan raw directory, chunk markdown and code, and build index.
+
+    Returns:
+        tuple[list[FullSource], list[FullSource]]: Markdown and Python chunks.
+    """
+    full_rebuild = False
+
+    chunks_path = processed / "chunks.json"
+    if not chunks_path.exists() or chunks_path.stat().st_size <= 3:
+        with open(processed / "chunks.json", "w") as f:
+            json.dump([{}, []], f)
+            full_rebuild = True
+    else:
+        with open(processed / "chunks.json", "r") as f:
+            content = json.load(f)[0]
+        if content.get("chunk_size", 0) != config.max_chunk_size:
+            full_rebuild = True
+
+    file_hashes_cache_path = processed / "file_hashes.json"
+    if (
+        not file_hashes_cache_path.exists()
+        or file_hashes_cache_path.stat().st_size <= 20
+    ):
+        with open(processed / "file_hashes.json", "w") as f:
+            json.dump({}, f)
+
+    query_cache_path = processed / "query_cache.json"
+    if not query_cache_path.exists() or query_cache_path.stat().st_size <= 20:
+        with open(processed / "query_cache.json", "w") as f:
+            json.dump({}, f)
+
+    try:
+        codebase_database = Path(config.raw_dir)
+
+        txt_files = [
+            str(f)
+            for f in codebase_database.rglob("*.txt")
+            if "tests" not in f.parts
+            if calculate_file_hash(f) or full_rebuild
+        ] + [
+            str(f)
+            for f in codebase_database.rglob("*.md")
+            if calculate_file_hash(f) or full_rebuild
+        ]
+        code_files = [
+            str(f)
+            for f in codebase_database.rglob("*.py")
+            if "tests" not in f.parts and not f.name.startswith("test_")
+            if calculate_file_hash(f) or full_rebuild
+        ]
+
+        if full_rebuild and not txt_files and not code_files:
+            raise ValueError("No files found in raw data directory")
+        md: list = []
+        py: list = []
+        processed_file = []
+        if txt_files:
+            processed_file.extend(txt_files)
+            for f in tqdm(sorted(txt_files), desc="TEXT FILESٌُِ READ"):
+                md.extend(text_strategies(f))
+
+        if code_files:
+            processed_file.extend(code_files)
+            for f in tqdm(sorted(code_files), desc="CODE FILESٌُِ READ"):
+                py.extend(code_strategies(f))
+
+        if processed_file:
+            build_index_cache(md + py, set(processed_file))
+
+        return md, py
+
+    except FileNotFoundError:
+        raise FileNotFoundError(f"{config.raw_dir} dataset files not found.\n")
+    except Exception as e:
+        raise Exception(f"Invalid dataset: {e}\n")
+
+
+def build_from_text(chunk: FullSource, content: str) -> str:
+    """Format a text/markdown chunk with title and header metadata.
+
+    Args:
+        chunk: Chunk data and position metadata.
+        content: Raw file content string.
+
+    Returns:
+        str: Formatted chunk text for indexing.
+    """
+    first_char = chunk.first_character_index
+    last_char = chunk.last_character_index
+    meta = chunk.metadata
+
+    parts = []
+    if isinstance(meta, MarkdownMetadata):
+        if meta.title:
+            parts.append(meta.title)
+        if meta.header and meta.title != meta.header:
+            parts.append(meta.header)
+
+    parts.append(content[first_char:last_char])
+
+    return "\n".join(parts)
+
+
+def build_from_code(chunk: FullSource, content: str) -> str:
+    """Format a Python code chunk with type, name, imports, and globals.
+
+    Args:
+        chunk: Chunk data and position metadata.
+        content: Raw file content string.
+
+    Returns:
+        str: Formatted code chunk text for indexing.
+    """
+    first_char = chunk.first_character_index
+    last_char = chunk.last_character_index
+
+    parts = []
+    parts.append(os.path.basename(chunk.file_path))
+    parts.append(content[first_char:last_char])
+
+    return "\n".join(parts)
+
+
+def tokenize(text: str) -> list[str]:
+    """Tokenize and clean text into lowercase words without stopwords.
+
+    Args:
+        text: Input text string.
+
+    Returns:
+        list[str]: Filtered list of clean tokens.
+    """
+    text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
+    text = text.replace("_", " ")
+    text = re.sub(r"[^a-zA-Z0-9\s]", " ", text)
+    tokens = text.lower().split()
+    stopwords = {"the", "a", "an", "is", "in", "it", "of", "to", "and", "or"}
+    return [t for t in tokens if t not in stopwords and len(t) > 1]
+
+
+def build_index_cache(
+    chunks: list[FullSource], scanned_files: set[str]
+) -> None:
+    """Build and persist BM25 and semantic embeddings cache.
+
+    Args:
+        chunks: Newly scanned FullSource chunks.
+        scanned_files: Set of scanned file paths.
+    """
+    with open(processed / "chunks.json", "r") as f:
+        old_chunks = json.load(f)[1]
+
+    updated_chunks = []
+    keep_indices: list[int] = []
+
+    for idx, c in enumerate(old_chunks):
+        if c["file_path"] not in scanned_files:
+            keep_indices.append(idx)
+            updated_chunks.append(FullSource.model_validate(c))
+
+    updated_chunks.extend(chunks)
+
+    with open(processed / "chunks.json", "w") as f:
+        json.dump(
+            [{"chunk_size": config.max_chunk_size}]
+            + [[x.model_dump(mode="json") for x in updated_chunks]],
+            f,
+            indent=4,
+        )
+
+    corpus: list[list[str]] = []
+    file_cache = {}
+    raw_text = []
+
+    if not updated_chunks:
+        return
+    for chunk in updated_chunks:
+        file_path = chunk.file_path
+        if file_path not in file_cache:
+            with open(file_path, "r") as f:
+                file_cache[file_path] = f.read()
+
+        content = file_cache[file_path]
+        if isinstance(chunk.metadata, MarkdownMetadata):
+            index_text = build_from_text(chunk, content)
+        else:
+            index_text = build_from_code(chunk, content)
+        ##
+        raw_text.append(index_text)
+        corpus.append(tokenize(index_text))
+
+    num_new = len(chunks)
+    new_raw_text = raw_text[-num_new:] if num_new > 0 else []
+
+    emd = Embedding()
+    emd.lexical(corpus)
+
+    emd.Semantic_embidding(raw_text, new_raw_text, keep_indices)
+
+    print(f"Index built: {len(updated_chunks)} chunks")

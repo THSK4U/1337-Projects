@@ -1,0 +1,211 @@
+from pathlib import Path
+from typing import Any
+
+import fire
+
+from .evaluator import evaluate as evaluate_fn
+from .generator import Generator
+from .indexer import load_all_files
+from .models import config
+from .retrieval import Retriever
+
+
+def full_pipeline(query: str, k: int) -> str:
+    raw_data = Path(config.raw_dir)
+    if not raw_data.is_dir():
+        raise FileNotFoundError(f"Raw data directory not found: {raw_data}")
+
+    processed = Path(config.processed_dir)
+    processed.mkdir(parents=True, exist_ok=True)
+    load_all_files()
+
+    retriever = Retriever()
+    generator = Generator()
+
+    search_results = retriever.search_fn(query=query, k=k)
+
+    context = generator.bulid_context(search_results)
+
+    answer = generator.generate_answer(context, query)
+
+    return answer
+
+
+class CLI:
+    """Command-line interface for RAG indexing, search, and evaluation."""
+
+    def __init__(self) -> None:
+        """Initialize CLI with lazy generator and retriever instances."""
+        self._generator: Any = None
+        self._retriever: Any = None
+
+    def generator(self) -> Any:
+        """Get or initialize the Generator instance.
+
+        Returns:
+            Any: Initialized Generator instance.
+        """
+        if self._generator is None:
+            from .generator import Generator
+
+            self._generator = Generator()
+        return self._generator
+
+    def retriever(self) -> Any:
+        """Get or initialize the Retriever instance.
+
+        Returns:
+            Any: Initialized Retriever instance.
+        """
+        if self._retriever is None:
+            from .retrieval import Retriever
+
+            self._retriever = Retriever()
+        return self._retriever
+
+    # index -max_chunk_size <int>
+    # Ingest data/raw/ and build the index under data/processed/.
+    def index(self, max_chunk_size: int | None = None) -> None:
+        """Ingest raw documents and build BM25 and semantic index.
+
+        Args:
+            max_chunk_size: Optional maximum character size per chunk.
+        """
+        if max_chunk_size is not None:
+            if not isinstance(max_chunk_size, int) or max_chunk_size <= 0:
+                print(
+                    f"max_chunk_size must be a positive integer, \
+got {max_chunk_size}"
+                )
+                return
+            config.max_chunk_size = max_chunk_size
+        raw_data = Path(config.raw_dir)
+        if not raw_data.is_dir():
+            raise FileNotFoundError(
+                f"Raw data directory not found: {raw_data}"
+            )
+        processed = Path(config.processed_dir)
+        processed.mkdir(parents=True, exist_ok=True)
+        load_all_files()
+        print(f"Ingestion complete! Indices saved under {processed}")
+
+    # • search <query> -k <int>
+    # Return the top-k sources for a single query.
+    def search(self, query: str, k: int) -> None:
+        """Return the top-k retrieved sources for a single query.
+
+        Args:
+            query: The search query string.
+            k: Number of sources to retrieve.
+        """
+        if not isinstance(k, int) or k <= 0:
+            raise ValueError(f"k must be a positive integer, got {k}")
+        if not query or not str(query).strip():
+            raise ValueError("Query is empty. Please provide a valid query.")
+        result = self.retriever().search_fn(query=query, k=k)
+        for r in result:
+            print(r.model_dump_json(indent=2))
+
+    # • search_dataset -dataset_path <path> -k <int> -save_directory <dir>
+    # Run search over a whole dataset and write a StudentSearchResults JSON.
+    def search_dataset(
+        self, dataset_path: str, save_directory: str, k: int
+    ) -> None:
+        """Run search across a dataset and write results to JSON.
+
+        Args:
+            dataset_path: Path to input RagDataset JSON file.
+            save_directory: Directory to store search results JSON.
+            k: Number of sources to retrieve per query.
+        """
+        if not Path(dataset_path).is_file() or not dataset_path.endswith(
+            ".json"
+        ):
+            raise FileNotFoundError(
+                f"Dataset file not found or not valid '{dataset_path}'"
+            )
+        if not isinstance(k, int) or k <= 0:
+            raise ValueError(f"k must be a positive integer, got {k}")
+
+        self.retriever().search_dataset_fn(dataset_path, k, save_directory)
+
+    # • answer <query> -k <int>
+    # Answer a single query using the retrieved context.
+    def answer(self, query: str, k: int) -> None:
+        """Answer a single query using retrieved context.
+
+        Args:
+            query: The question string.
+            k: Number of sources to retrieve for context.
+        """
+        if not isinstance(k, int) or k <= 0:
+            raise ValueError(f"k must be a positive integer, got {k}")
+        if not query or not str(query).strip():
+            raise ValueError("Query is empty. Please provide a valid query.")
+        result = self.retriever().search_fn(query=query, k=k)
+        context = self.generator().bulid_context(result)
+        ans = self.generator().generate_answer(context, query)
+        print(ans)
+
+    # answer_dataset -student_search_results_path <path> -save_directory <dir>
+    # Generate answers for a dataset,producing a StudentSearchResultsAndAnswer.
+    def answer_dataset(
+        self, student_search_results_path: str, save_directory: str
+    ) -> None:
+        """Generate answers for a dataset of search results.
+
+        Args:
+            student_search_results_path: Path to search results JSON.
+            save_directory: Directory to save generated answers JSON.
+        """
+        if not Path(
+            student_search_results_path
+        ).is_file() or not student_search_results_path.endswith(".json"):
+            raise FileNotFoundError(
+                f"Dataset file not found at '{student_search_results_path}'"
+            )
+
+        self.generator().answer_dataset(
+            student_search_results_path, save_directory
+        )
+
+    # • evaluate -student_search_results_path <path> -dataset_path <path>
+    # Report your own recall@k against a ground-truth dataset.
+    def evaluate(
+        self, student_search_results_path: str, dataset_path: str
+    ) -> None:
+        """Evaluate student search results against ground-truth dataset.
+
+        Args:
+            student_search_results_path: Path to student search results.
+            dataset_path: Path to ground-truth answered questions dataset.
+        """
+        if not Path(
+            student_search_results_path
+        ).is_file() or not student_search_results_path.endswith(".json"):
+            raise FileNotFoundError(
+                f"Dataset file not found at '{student_search_results_path}'"
+            )
+        if not Path(dataset_path).is_file() or not dataset_path.endswith(
+            ".json"
+        ):
+            raise FileNotFoundError(
+                f"Dataset file not found at '{dataset_path}'"
+            )
+        evaluate_fn(
+            student_search_results_path,
+            dataset_path,
+        )
+
+
+if __name__ == "__main__":
+    try:
+        fire.Fire(CLI)
+        # ans = full_pipeline("what your name?", 10)
+        # print(ans)
+    except (KeyboardInterrupt, EOFError):
+        print("\nOperation cancelled by user.")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
